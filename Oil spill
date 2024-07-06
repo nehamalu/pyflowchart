@@ -1,0 +1,78 @@
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import serial
+import time
+
+interpreter = tf.lite.Interpreter(model_path="model.tflite")
+interpreter.allocate_tensors()
+
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
+class_names = ["Oil Spill Detected", "No Oil Spill Detected"]
+
+def predict_image(image_path):
+
+    img = Image.open(image_path).resize((224, 224))
+
+    img_array = np.array(img) / 255.0
+
+    img_array = np.expand_dims(img_array, axis=0).astype(np.float32)
+
+    interpreter.set_tensor(input_details[0]['index'], img_array)
+
+    interpreter.invoke()
+
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+
+    predicted_class_index = np.argmax(output_data)
+
+    predicted_class_name = class_names[predicted_class_index]
+
+    return predicted_class_name
+
+def user_interface():
+    print("Welcome to the Oil Spill Detection System")
+    print("==========================================")
+    print("Choose an option:")
+    print("1. Image with oil spill")
+    print("2. Image without oil spill")
+    choice = input("Enter your choice (1/2): ")
+
+    if choice == '1':
+        image_path = "image_with_oil_spill.jpg"
+        return image_path
+    elif choice == '2':
+        image_path = "normal.jpg"
+        return image_path
+    else:
+        print("Invalid choice. Please enter 1 or 2.")
+        return None
+
+def send_to_arduino(result, com_port):
+
+    ser = serial.Serial(com_port, 9600, timeout=1)
+
+    time.sleep(2)
+
+    ser.write(result.encode())
+
+    ser.close()
+
+def main():
+    while True:
+        image_path = user_interface()
+        if image_path:
+            predicted_class_name = predict_image(image_path)
+            print("==========================================")
+            print("Predicted class:", predicted_class_name)
+            print("==========================================")
+
+            com_port = input("Enter the COM port to connect to Arduino (e.g., COM1): ")
+
+            send_to_arduino(predicted_class_name, com_port)
+            break
+
+if _name_ == "_main_":
+    main()
